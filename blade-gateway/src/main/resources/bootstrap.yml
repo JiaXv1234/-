@@ -1,0 +1,25 @@
+server:
+  # 本机开发环境：81 端口被 Windows HTTP.sys 占用（RPCProxy / TokenBroker，PID 4），
+  # 实测无法绑定，故本地改用 8081；需同步修改 saber3\vite.config.mjs 中 /api 的 proxy target。
+  port: 8081
+
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: true
+    loadbalancer:
+      retry:
+        enabled: true
+
+# 兼容性说明：新版gateway配置需要最后启动才能发现服务，否则会出现404的问题
+# 此问题可等spring官方修复，或临时处理方案采用下方旧版配置即可自动发现服务
+#spring:
+#  cloud:
+#    gateway:
+#      discovery:
+#        locator:
+#          enabled: true
