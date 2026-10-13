@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.springblade.attendance.approval.mapper.ApprovalQueryMapper">
+  <select id="lockApplicant" resultType="java.lang.Long">
+    SELECT USER_ID FROM tb_g2_user WHERE USER_ID=#{employeeId} FOR UPDATE
+  </select>
+  <select id="selectCenterPage" resultType="org.springblade.attendance.pojo.vo.ApprovalItemVO">
+    <choose>
+      <when test="tab == 'cc'">
+        SELECT f.*, c.ID AS cc_id, c.IS_READ, c.CC_TIME AS arrived_time
+        FROM tb_approval_cc c JOIN tb_approval_flow_info f ON f.FLOW_ID=c.FLOW_ID
+        <where><if test="!monitor">c.TO_USER_ID=#{employeeId}</if></where>
+        ORDER BY c.CC_TIME DESC, c.ID DESC
+      </when>
+      <otherwise>
+        SELECT f.*, t.TASK_ID, t.TASK_STATUS, t.CREATE_TIME AS arrived_time,
+          t.FINISH_TIME, n.LEVEL_NO
+        FROM tb_approval_task t JOIN tb_approval_flow_info f ON f.FLOW_ID=t.FLOW_ID
+        JOIN tb_approval_node_info n ON n.NODE_ID=t.NODE_ID AND n.FLOW_ID=t.FLOW_ID
+        <where>
+          <if test="!monitor">t.APPROVER_ID=#{employeeId} AND</if>
+          <choose>
+            <when test="tab == 'todo'">t.TASK_STATUS='1' AND f.FLOW_STATUS='1' AND n.NODE_STATUS='2'</when>
+            <otherwise>t.TASK_STATUS IN ('2','3')</otherwise>
+          </choose>
+        </where>
+        ORDER BY <choose><when test="tab == 'todo'">t.CREATE_TIME</when><otherwise>t.FINISH_TIME</otherwise></choose> DESC, t.TASK_ID DESC
+      </otherwise>
+    </choose>
+  </select>
+  <select id="business" resultType="org.springblade.attendance.pojo.vo.ApprovalBusinessVO">
+    <choose>
+      <when test="bizType == '1' or bizType == '5'">
+        SELECT a.USER_ID AS requester_id, a.ORGAN_ID, a.VAC_ID, u.USER_ATTR AS requester_attr,
+          u.USER_NAME AS requester_name, u.USER_CODE, o.DEPT_NAME AS organ_name,
+          a.FLOW_ID AS source_flow_id, a.APPROVE_STATUS, a.START_DATE AS start_time,
+          a.END_DATE AS end_time, a.LEAVE_DAYS AS amount, '天' AS unit, a.REASON,
+          v.VAC_NAME, v.VAC_SYMBOL AS symbol, '' AS extra_info
+        FROM tb_at_vacation_apply a LEFT JOIN tb_g2_user u ON u.USER_ID=a.USER_ID
+        LEFT JOIN tb_g2_organ o ON o.ORGAN_ID=a.ORGAN_ID
+        LEFT JOIN tb_at_vacation_code v ON v.VAC_ID=a.VAC_ID
+        WHERE a.APPLY_NO=#{bizNo}
+      </when>
+      <when test="bizType == '2'">
+        SELECT a.USER_ID AS requester_id, a.ORGAN_ID, u.USER_ATTR AS requester_attr,
+          u.USER_NAME AS requester_name, u.USER_CODE, o.DEPT_NAME AS organ_name,
+          a.FLOW_ID AS source_flow_id, a.APPROVE_STATUS, CAST(a.WORK_DATE AS DATETIME) AS start_time,
+          CAST(a.WORK_DATE AS DATETIME) AS end_time, 1 AS amount, '次' AS unit, a.REASON,
+          '补打卡' AS vac_name, '补' AS symbol,
+          CONCAT(CASE a.CARD_TYPE WHEN '1' THEN '上班卡' ELSE '下班卡' END,
+            ' · 当月第', a.MONTH_COUNT, '次 · 门岗记录ID：', COALESCE(CAST(a.ACCESS_REC_ID AS CHAR),'未关联')) AS extra_info
+        FROM tb_at_recard_apply a LEFT JOIN tb_g2_user u ON u.USER_ID=a.USER_ID
+        LEFT JOIN tb_g2_organ o ON o.ORGAN_ID=a.ORGAN_ID
+        WHERE a.APPLY_NO=#{bizNo}
+      </when>
+      <when test="bizType == '3'">
+        SELECT a.APPLY_USER_ID AS requester_id, a.ORGAN_ID, u.USER_ATTR AS requester_attr,
+          u.USER_NAME AS requester_name, u.USER_CODE, o.DEPT_NAME AS organ_name,
+          a.FLOW_ID AS source_flow_id, a.APPROVE_STATUS, a.START_TIME, a.END_TIME,
+          a.APPLY_HOURS AS amount, '小时' AS unit, a.REASON,
+          '加班' AS vac_name, '加' AS symbol, '直属上级代申请' AS extra_info
+        FROM tb_at_overtime_rec a LEFT JOIN tb_g2_user u ON u.USER_ID=a.APPLY_USER_ID
+        LEFT JOIN tb_g2_organ o ON o.ORGAN_ID=a.ORGAN_ID
+        WHERE a.APPLY_NO=#{bizNo}
+      </when>
+      <when test="bizType == '4'">
+        SELECT a.USER_ID AS requester_id, a.ORGAN_ID, u.USER_ATTR AS requester_attr,
+          u.USER_NAME AS requester_name, u.USER_CODE, o.DEPT_NAME AS organ_name,
+          a.FLOW_ID AS source_flow_id, a.APPROVE_STATUS, a.START_DATE AS start_time,
+          a.END_DATE AS end_time, a.REST_HOURS AS amount, '小时' AS unit, '' AS reason,
+          '调休' AS vac_name, '调' AS symbol, '' AS extra_info
+        FROM tb_at_pay_overtime_info a LEFT JOIN tb_g2_user u ON u.USER_ID=a.USER_ID
+        LEFT JOIN tb_g2_organ o ON o.ORGAN_ID=a.ORGAN_ID
+        WHERE a.APPLY_NO=#{bizNo}
+      </when>
+      <otherwise>SELECT NULL AS requester_id WHERE 1=0</otherwise>
+    </choose>
+  </select>
+</mapper>
