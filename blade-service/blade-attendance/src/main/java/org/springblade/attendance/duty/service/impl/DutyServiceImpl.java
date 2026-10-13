@@ -59,6 +59,7 @@ public class DutyServiceImpl extends ServiceImpl<DutyPlanMapper, DutyPlan> imple
 
 	private final DutyLockMapper locks;
 	private final DutyStatsMapper statsMapper;
+	private final DutyOrganMapper organMapper;
 	private final DutyScope scope;
 	private void lock() { scope.organs(); locks.lock(); }
 	private LambdaQueryWrapper<DutyPlan> base() {
@@ -70,9 +71,11 @@ public class DutyServiceImpl extends ServiceImpl<DutyPlanMapper, DutyPlan> imple
 		}
 		return wrapper;
 	}
-	public IPage<DutyPlan> page(Query query, String month, String code) {
+	public IPage<DutyPlan> page(Query query, String month, String code, Long organId) {
+		if (organId != null) scope.check(organId);
 		LambdaQueryWrapper<DutyPlan> wrapper = base().eq(DutyPlan::getDataStatus, 1)
-			.eq(month != null && !month.isBlank(), DutyPlan::getPlanMonth, month);
+			.eq(month != null && !month.isBlank(), DutyPlan::getPlanMonth, month)
+			.eq(organId != null, DutyPlan::getOrganId, organId);
 		if (code != null && !code.isBlank()) {
 			DutyEmployee employee = employees.selectOne(Wrappers.<DutyEmployee>lambdaQuery().eq(DutyEmployee::getUserCode, code.trim()));
 			wrapper.eq(DutyPlan::getUserId, employee == null ? -1L : employee.getUserId());
@@ -80,9 +83,49 @@ public class DutyServiceImpl extends ServiceImpl<DutyPlanMapper, DutyPlan> imple
 		IPage<DutyPlan> result = plans.selectPage(Condition.getPage(query), wrapper.orderByDesc(DutyPlan::getDutyDate));
 		result.getRecords().forEach(this::enrich); return result;
 	}
-	public List<DutyPlan> export(String month) {
+	public DutyPlan detail(Long id) {
+		DutyPlan plan = plans.selectOne(base().eq(DutyPlan::getId, id).eq(DutyPlan::getDataStatus, 1));
+		if (plan == null) throw new ServiceException("计划不存在、已作废或不在授权范围内");
+		enrich(plan);
+		return plan;
+	}
+	public List<DutyOrgan> departments() {
+		LambdaQueryWrapper<DutyOrgan> wrapper = Wrappers.<DutyOrgan>lambdaQuery();
+		List<Long> organIds = scope.organs();
+		if (organIds != null) wrapper.in(DutyOrgan::getOrganId, organIds.isEmpty() ? List.of(-1L) : organIds);
+		return organMapper.selectList(wrapper.orderByAsc(DutyOrgan::getDeptCode));
+	}
+	/**
+	 * 概览与年度统计保持有效计划口径，不把计划时间推算成实际打卡实绩。
+	 */
+	public Map<String, Object> overview(String month, Long organId) {
+		if (month == null || !month.matches("\\d{6}")) throw new ServiceException("月份格式必须为yyyyMM");
+		YearMonth selectedMonth = YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyyMM"));
+		if (organId != null) scope.check(organId);
+		List<DutyPlan> annualPlans = plans.selectList(base().eq(DutyPlan::getDataStatus, 1)
+			.eq(organId != null, DutyPlan::getOrganId, organId)
+			.likeRight(DutyPlan::getPlanMonth, String.valueOf(selectedMonth.getYear())));
+		LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Shanghai"));
+		List<DutyPlan> todayPlans = plans.selectList(base().eq(DutyPlan::getDataStatus, 1)
+			.eq(organId != null, DutyPlan::getOrganId, organId)
+			.eq(DutyPlan::getDutyStatus, "2")
+			.between(DutyPlan::getDutyDate, now.toLocalDate().minusDays(1), now.toLocalDate()));
+		Map<String, Object> result = new LinkedHashMap<>();
+		result.put("year", selectedMonth.getYear());
+		result.put("totalHours", annualPlans.stream().map(DutyPlan::getDutyHours)
+			.filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
+		result.put("monthCount", annualPlans.stream().filter(plan -> month.equals(plan.getPlanMonth())).count());
+		result.put("todayOnDuty", todayPlans.stream()
+			.filter(plan -> !now.isBefore(plan.getStartsAt()) && now.isBefore(plan.getEndsAt()))
+			.map(DutyPlan::getUserId).distinct().count());
+		result.put("statisticsBasis", "PLAN");
+		return result;
+	}
+	public List<DutyPlan> export(String month, Long organId) {
+		if (organId != null) scope.check(organId);
 		List<DutyPlan> result = plans.selectList(base().eq(DutyPlan::getDataStatus, 1)
-			.eq(month != null && !month.isBlank(), DutyPlan::getPlanMonth, month).orderByAsc(DutyPlan::getDutyDate));	result.forEach(this::enrich); return result;
+			.eq(month != null && !month.isBlank(), DutyPlan::getPlanMonth, month)
+			.eq(organId != null, DutyPlan::getOrganId, organId).orderByAsc(DutyPlan::getDutyDate));	result.forEach(this::enrich); return result;
 	}
 	public IPage<DutyImportLog> batches(Query query) {
 		LambdaQueryWrapper<DutyImportLog> wrapper = Wrappers.<DutyImportLog>lambdaQuery();
@@ -92,22 +135,31 @@ public class DutyServiceImpl extends ServiceImpl<DutyPlanMapper, DutyPlan> imple
 	}
 	public IPage<DutyOutbox> tasks(Query query) { return Condition.getPage(query); }
 	public List<DutyEmployee> employees() {
-		LambdaQueryWrapper<DutyEmployee> wrapper=Wrappers.<DutyEmployee>lambdaQuery();
+		LambdaQueryWrapper<DutyEmployee> wrapper=Wrappers.<DutyEmployee>lambdaQuery().eq(DutyEmployee::getOnJobStatus, 1);
 		List<Long> organs=scope.organs(); if(organs!=null) wrapper.in(DutyEmployee::getOrganId,organs.isEmpty()?List.of(-1L):organs);
 		return employees.selectList(wrapper);
 	}
 	public void bind(DutyEmployee input) { throw new ServiceException("人员信息直接读取 tb_g2_user，请在人事模块维护"); }
-	private void enrich(DutyPlan plan) { DutyEmployee employee=employees.selectById(plan.getUserId()); if(employee!=null){plan.setUserCode(employee.getUserCode());plan.setUserName(employee.getUserName());} }
+	private void enrich(DutyPlan plan) {
+		DutyEmployee employee = employees.selectById(plan.getUserId());
+		if (employee != null) { plan.setUserCode(employee.getUserCode()); plan.setUserName(employee.getUserName()); }
+		DutyOrgan organ = plan.getOrganId() == null ? null : organMapper.selectById(plan.getOrganId());
+		plan.setOrganName(organ == null ? "部门未匹配" : organ.getDeptName());
+	}
 	private DutyPlan build(DutyDTO dto) {
-		if (dto.getUserCode() == null || dto.getDutyDate() == null) throw new ServiceException("工号和值班日期必填");
+		if (dto.getUserCode() == null || dto.getUserCode().isBlank() || dto.getDutyDate() == null) throw new ServiceException("工号和值班日期必填");
 		DutyEmployee employee = employees.selectOne(Wrappers.<DutyEmployee>lambdaQuery()
 			.eq(DutyEmployee::getUserCode, dto.getUserCode().trim()));
 		if (employee == null) throw new ServiceException("工号不存在");
+		if (!Objects.equals(employee.getOnJobStatus(), 1)) throw new ServiceException("该工号不是在职人员");
 		scope.check(employee.getOrganId());
 		if (!Objects.equals(dto.getAcrossDay(), 0) && !Objects.equals(dto.getAcrossDay(), 1)) throw new ServiceException("跨天必须为0或1");
 		if (dto.getStartTime() == null || dto.getEndTime() == null || !dto.getStartTime().matches("\\d{2}:\\d{2}") || !dto.getEndTime().matches("\\d{2}:\\d{2}"))
 			throw new ServiceException("时间格式必须为HH:mm");
-		LocalTime start = LocalTime.parse(dto.getStartTime()); LocalTime end = LocalTime.parse(dto.getEndTime());
+		LocalTime start;
+		LocalTime end;
+		try { start = LocalTime.parse(dto.getStartTime()); end = LocalTime.parse(dto.getEndTime()); }
+		catch (DateTimeException exception) { throw new ServiceException("开始或结束时间无效，请填写HH:mm格式的有效时间"); }
 		LocalDateTime starts = dto.getDutyDate().atTime(start);
 		LocalDateTime ends = dto.getDutyDate().plusDays(dto.getAcrossDay()).atTime(end);
 		long minutes = Duration.between(starts, ends).toMinutes();
@@ -146,7 +198,7 @@ public class DutyServiceImpl extends ServiceImpl<DutyPlanMapper, DutyPlan> imple
 		if (month == null || !month.matches("\\d{6}")) throw new ServiceException("归属月份格式必须为yyyyMM");
 		YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyyMM")); scope.check(organId);
 		if (!Set.of("1", "2").contains(mode)) throw new ServiceException("导入方式必须为1覆盖或2追加");
-		if (rows.isEmpty() || rows.size() > 5000) throw new ServiceException("导入须包含1至5000条记录");
+		if (rows.isEmpty() || rows.size() > 2000) throw new ServiceException("导入须包含1至2000条记录");
 		List<DutyPlan> accepted = new ArrayList<>(); List<Map<String, Object>> errors = new ArrayList<>();
 		List<DutyPlan> existing = active();
 		if ("1".equals(mode)) existing.removeIf(p -> month.equals(p.getPlanMonth()) && (organId == null || organId.equals(p.getOrganId())));
@@ -154,8 +206,22 @@ public class DutyServiceImpl extends ServiceImpl<DutyPlanMapper, DutyPlan> imple
 			try {
 				DutyExcel row = rows.get(index); DutyDTO dto = new DutyDTO();
 				dto.setUserCode(row.getUserCode()); dto.setDutyDate(LocalDate.parse(row.getDutyDate())); dto.setStartTime(row.getStartTime());
-				dto.setEndTime(row.getEndTime()); dto.setAcrossDay(Integer.valueOf(row.getAcrossDay())); dto.setDutyType(row.getDutyType()); dto.setDutyContent(row.getDutyContent());
+				dto.setEndTime(row.getEndTime());
+				dto.setAcrossDay(row.getAcrossDay() == null || row.getAcrossDay().isBlank()
+					? (LocalTime.parse(row.getEndTime()).isAfter(LocalTime.parse(row.getStartTime())) ? 0 : 1)
+					: Integer.valueOf(row.getAcrossDay()));
+				String dutyType = row.getDutyType();
+				dto.setDutyType(switch (dutyType == null ? "" : dutyType.trim()) {
+					case "生产值班" -> "1";
+					case "设备值班" -> "2";
+					case "应急值班" -> "3";
+					case "安全值班" -> "4";
+					default -> dutyType == null ? null : dutyType.trim();
+				});
+				dto.setDutyContent(row.getDutyContent());
 				DutyPlan plan = build(dto);
+				if (row.getUserName() != null && !row.getUserName().isBlank() && !row.getUserName().trim().equals(plan.getUserName()))
+					throw new ServiceException("姓名与工号对应的人员不一致");
 				if (!month.equals(plan.getPlanMonth())) throw new ServiceException("值班日期不属于导入月份");
 				if (organId != null && !organId.equals(plan.getOrganId())) throw new ServiceException("人员不属于导入组织范围");
 				for (DutyPlan other : existing) if (overlaps(plan, other)) throw new ServiceException("与已有值班时段重叠");

@@ -25,6 +25,7 @@
  */
 package org.springblade.attendance.duty.excel;
 import cn.idev.excel.annotation.ExcelProperty;
+import cn.idev.excel.annotation.ExcelIgnore;
 import lombok.Data;
 /**
  * 值班导入模板；所有日期时间以文本输入
@@ -34,17 +35,19 @@ import lombok.Data;
 public class DutyExcel {
 	@ExcelProperty(value = "工号", index = 0)
 	private String userCode;
-	@ExcelProperty(value = "值班日期(yyyy-MM-dd)", index = 1)
+	@ExcelProperty(value = "姓名", index = 1)
+	private String userName;
+	@ExcelProperty(value = "值班日期", index = 2)
 	private String dutyDate;
-	@ExcelProperty(value = "开始时间(HH:mm)", index = 2)
+	@ExcelProperty(value = "开始时间", index = 3)
 	private String startTime;
-	@ExcelProperty(value = "结束时间(HH:mm)", index = 3)
+	@ExcelProperty(value = "结束时间", index = 4)
 	private String endTime;
-	@ExcelProperty(value = "跨天(0/1)", index = 4)
+	@ExcelIgnore
 	private String acrossDay;
-	@ExcelProperty(value = "类型(1生产/2设备/3应急/4安全)", index = 5)
+	@ExcelProperty(value = "值班类型", index = 5)
 	private String dutyType;
-	@ExcelProperty(value = "值守职责", index = 6)
+	@ExcelProperty(value = "工作内容", index = 6)
 	private String dutyContent;
 }
 

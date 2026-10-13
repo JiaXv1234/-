@@ -37,8 +37,11 @@ import java.util.Map;
  * @author Chill
  */
 public interface IDutyService extends IService<DutyPlan> {
-	IPage<DutyPlan> page(Query query, String month, String code);
-	List<DutyPlan> export(String month);
+	IPage<DutyPlan> page(Query query, String month, String code, Long organId);
+	DutyPlan detail(Long id);
+	List<DutyOrgan> departments();
+	Map<String, Object> overview(String month, Long organId);
+	List<DutyPlan> export(String month, Long organId);
 	IPage<DutyImportLog> batches(Query query);
 	IPage<DutyOutbox> tasks(Query query);
 	List<DutyEmployee> employees();

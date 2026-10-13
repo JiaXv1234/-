@@ -51,6 +51,7 @@ private Integer dataStatus;
 private String statsFlag;
 @TableField(exist=false) private String userCode;
 @TableField(exist=false) private String userName;
+@TableField(exist=false) private String organName;
 public java.time.LocalDateTime getStartsAt(){return dutyDate.atTime(java.time.LocalTime.parse(startTime));}
 public java.time.LocalDateTime getEndsAt(){return dutyDate.plusDays(acrossDay).atTime(java.time.LocalTime.parse(endTime));}
 }
