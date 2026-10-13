@@ -17,6 +17,7 @@
     <description>BladeX 微服务集合</description>
 
     <modules>
+        <module>blade-attendance</module>
         <module>blade-desk</module>
         <module>blade-system</module>
     </modules>

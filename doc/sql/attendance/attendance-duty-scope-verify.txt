@@ -1,0 +1,21 @@
+鍊肩彮绠＄悊鎺ュ彛楠岃瘉璁板綍
+Gateway: http://127.0.0.1:8081   璐﹀彿: admin   瑙掕壊: administrator
+楠岃瘉鏃堕棿: 2026-10-10 09:45:56
+
+--- 鍙鎺ュ彛: 浠呴渶 duty 鑿滃崟鏉冮檺 ---
+HTTP 200  duty (menu)          Get /blade-attendance/duty/list?current=1&size=2 {"code":200,"success":true,"data":{"records":[{"id":"8100100000000456","importBatch":"ZB-IMP-SIM20261010-202610","userId":"8100100000000101","organId":"1123598813738675202","planMonth":"202610","dutyD...
+HTTP 200  duty (menu)          Get /blade-attendance/duty/employees           {"code":200,"success":true,"data":[{"userCode":"SIM20261010-001","userName":"模拟员工01","organId":"1123598813738675202","onJobStatus":1,"userId":"8100100000000047"},{"userCode":"SIM20261010-002","userNam...
+HTTP 200  duty (menu)          Get /blade-attendance/duty/statistics?year=2026 {"code":200,"success":true,"data":[{"id":"8100100000000461","userId":"8100100000000047","statYear":"2026","totalHours":"14.0","dutyCount":3,"userCode":"SIM20261010-001","userName":"模拟员工01","organId":"...
+HTTP 200  duty (menu)          Get /blade-attendance/duty/batches?current=1&size=2 {"code":200,"success":true,"data":{"records":[{"id":"8100100000000449","importBatch":"ZB-IMP-SIM20261010-202610","fileName":"SIM20261010-202610-模拟值班表.xlsx","fileUrl":"","planMonth":"202610","organId":...
+
+--- 鍐欐搷浣滄帴鍙? 闇€ blade_scope_api 鎺ュ彛鏉冮檺 ---
+HTTP 200  duty_save            Post /blade-attendance/duty/save               {"code":200,"success":true,"data":{"id":"2108735752073523201","importBatch":"MANUAL","userId":"8100100000000047","organId":"1123598813738675202","planMonth":"202610","dutyDate":"2026-10-25","startTime...
+HTTP 200  duty_import          Get /blade-attendance/duty/template            (xlsx binary, 3598 chars)
+HTTP 200  duty_export          Get /blade-attendance/duty/export?month=202610 (xlsx binary, 4077 chars)
+HTTP 200  duty_export          Get /blade-attendance/duty/statistics-export?year=2026 (xlsx binary, 3931 chars)
+HTTP 400  duty_retry           Post /blade-attendance/duty/retry?id=1         {"code":400,"success":false,"data":{},"msg":"现有数据库未定义门禁任务存储，尚未对接门禁"}
+HTTP 400  duty_employee-bind   Post /blade-attendance/duty/employee-bind      {"code":400,"success":false,"data":{},"msg":"人员信息直接读取 tb_g2_user，请在人事模块维护"}
+HTTP 400  duty_cancel          Post /blade-attendance/duty/cancel?id=999999   {"code":400,"success":false,"data":{},"msg":"计划不存在或已作废"}
+HTTP 400  duty_rollback        Post /blade-attendance/duty/rollback?id=999999 {"code":400,"success":false,"data":{},"msg":"批次不存在或已回滚"}
+
+璇存槑: 401 = 鎺ュ彛鏈巿鏉?(鏈宸蹭慨澶?; 200 = 閫氳繃; 400 = 鏉冮檺宸查€氳繃浣嗕笟鍔¤鍒欐嫆缁?(濡?ID 涓嶅瓨鍦?/ 鍔熻兘鏈疄鐜?

@@ -15,6 +15,7 @@
     <description>BladeX 微服务API集合</description>
 
     <modules>
+        <module>blade-attendance-api</module>
         <module>blade-authority-api</module>
         <module>blade-desk-api</module>
         <module>blade-dict-api</module>

@@ -1,0 +1,12 @@
+server:
+  port: 8110
+blade:
+  tenant:
+    enhance: false
+spring:
+  datasource:
+    # 考勤业务独立数据库；系统服务仍使用公共配置中的 bladex。
+    url: ${ATTENDANCE_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/attendance?useSSL=false&useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&transformedBitIsBoolean=true&tinyInt1isBit=false&allowMultiQueries=true&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true}
+    username: ${blade.datasource.dev.username}
+    password: ${blade.datasource.dev.password}
+
